@@ -19,7 +19,7 @@ test : checkBuild
 	fi
 	
 gdb : checkBuild
-	gdb -ex 'set args init_mem/$(TCASE).txt)' ./sim
+	gdb -ex 'set args init_mem/$(TCASE).txt' ./sim
 	
 checkMem : checkBuild
 	valgrind --leak-check=full ./sim init_mem/$(TCASE).txt
