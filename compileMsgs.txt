@@ -1,3 +1,0 @@
-make[1]: Entering directory '/home/andrew/Classes/cs320/project2/code'
-gcc -ggdb -Wall -std=c18 -o../sim sim.c
-make[1]: Leaving directory '/home/andrew/Classes/cs320/project2/code'

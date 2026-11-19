@@ -34,11 +34,12 @@ const int COUNT_ID_CBNEG = 12;
 
 const int MEMORY_STEP = 4;
 int mainMemory[0x2000] = {0};
-int register_file[32] = {0};
-int cycle_count = 1;
-int total_instructions = 1;
+int register_file[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int cycle_count = 0;
+int total_instructions = 0;
 bool exit_program = false;
-int *InstructionCounts[12] = {};
+int instructionCounts[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+char *instructionCountsLabel[13] = {"NOP", "ADD,", "SUB", "MUL", "DIV", "LD", "ST", "EXIT", "MOV", "B", "CBZ", "CBNZ", "CBNEG"};
 
 void pulse()
 {
@@ -56,10 +57,12 @@ void fetch()
 	if_dr.nextVal = mainMemory[pc.currentVal / MEMORY_STEP];
 	pc.nextVal = pc.currentVal + MEMORY_STEP;
 	if_dr.nextPCInc = pc.nextVal;
+	if_dr.MachineAddress = mainMemory[pc.currentVal];
 }
 
 void decode()
 {
+
 	int code = if_dr.currentVal;
 	int op = (code & 0xff000000) >> (4 * 6);
 	int b1 = (code & 0x00ff0000) >> (4 * 4);
@@ -325,13 +328,16 @@ void memory()
 
 void writeBack()
 {
+	instructionCounts[mem_wb.CountId] += 1;
+
 	if (mem_wb.RegWrite)
 		register_file[mem_wb.Rd] = mem_wb.currentVal;
+
 	if (mem_wb.Exit)
-	{
 		exit_program = true;
-		printf(" ===================== Exiting program =====================\n");
-	}
+
+	if (mem_wb.CountId != COUNT_ID_NOP)
+		total_instructions++;
 }
 
 void putMachineCodeIntoMemory(char **argv)
@@ -383,6 +389,9 @@ int main(int argc, char **argv)
 	// copy the input file to a vector
 	putMachineCodeIntoMemory(argv);
 
+	printf("== cycle |    fetch |   decode |  exec1   |  exec2   |   memory | writeBack|\n");
+	printf("== ------+----------+----------+----------+----------+----------+----------|\n");
+
 	while (!exit_program)
 	{
 		fetch();
@@ -392,12 +401,25 @@ int main(int argc, char **argv)
 		memory();
 		writeBack();
 		pulse();
+		printf("== %5x | %8x | %8x | %8x | %8x | %8x | %8x |\n", cycle_count, if_dr.nextVal, dr_ex.nextVal, ex1_ex2.nextVal, ex1_ex2.nextVal, ex2_mem.nextVal, mem_wb.nextVal);
 	}
 
-	// printf("== cycle |    fetch |   decode |  exec1   |  exec2   |   memory | writeBack|\n");
-	// printf("== ------+----------+----------+----------+----------+----------+----------|\n");
-
-	printf("=== Simulation Reports ===\n");
+	printf(" === Simulation Reports ===\n");
+	printf("Non-Zero Registers....\n");
+	for (int i = 0; i < sizeof(register_file); i++)
+	{
+		if (register_file[i])
+			printf("  X%d, = %d\n", i, register_file[i]);
+	}
+	printf("Instruction Count Report...\n");
+	printf("OPCODE - CNT\n");
+	for (int i = 1; i < sizeof(instructionCounts); i++)
+	{
+		if (instructionCounts[i])
+			printf("%s - %d\n", instructionCountsLabel[i], instructionCounts[i]);
+	}
 	printf("Total Instructions=%d Cycles=%d IPC= %.2f\n", total_instructions, cycle_count, (double)total_instructions / cycle_count);
+	printf("\n");
+
 	return 0;
 }

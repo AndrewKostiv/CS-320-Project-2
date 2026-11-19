@@ -1,3 +1,0 @@
- ===================== Exiting program =====================
-=== Simulation Reports ===
-Total Instructions=1 Cycles=9 IPC= 0.11
