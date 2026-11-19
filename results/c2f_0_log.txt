@@ -1,11 +1,3 @@
-11000fa0
-0b010000
-07010109
-09010105
-03010120
-0d010004
-0e000000
-0e000000
-BIT TEST: 1122
+ ===================== Exiting program =====================
 === Simulation Reports ===
-Total Instructions=1 Cycles=1 IPC= 1.00
+Total Instructions=1 Cycles=9 IPC= 0.11
