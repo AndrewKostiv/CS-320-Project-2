@@ -1,0 +1,18 @@
+make[1]: Entering directory '/home/andrew/Classes/cs320/project2/code'
+gcc -ggdb -Wall -std=c18 -o../sim sim.c
+sim.c: In function ‘decode’:
+sim.c:16:23: error: expected expression before ‘=’ token
+   16 | #define BRANCH_TYPE_B = 0;
+      |                       ^
+sim.c:181:56: note: in expansion of macro ‘BRANCH_TYPE_B’
+  181 |                         dr_ex.currentData.BranchType = BRANCH_TYPE_B;
+      |                                                        ^~~~~~~~~~~~~
+sim.c: In function ‘exec2’:
+sim.c:16:23: error: expected expression before ‘=’ token
+   16 | #define BRANCH_TYPE_B = 0;
+      |                       ^
+sim.c:253:56: note: in expansion of macro ‘BRANCH_TYPE_B’
+  253 |                 if ((ex1_ex2.currentData.BranchType == BRANCH_TYPE_B) ||
+      |                                                        ^~~~~~~~~~~~~
+make[1]: *** [Makefile:7: ../sim] Error 1
+make[1]: Leaving directory '/home/andrew/Classes/cs320/project2/code'
