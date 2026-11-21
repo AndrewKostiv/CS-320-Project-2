@@ -9,6 +9,10 @@ MEM_WB_t mem_wb;
 
 FetchStage_t fetchStage;
 DecodeStage_t decodeStage;
+Exec1Stage_t exec1Stage;
+Exec2Stage_t exec2Stage;
+MemoryStage_t memoryStage;
+WriteBackStage_t writeBackStage;
 
 const int ALU_OP_NOP = 0x0000;
 const int ALU_OP_ADD = 0x0001;
@@ -58,16 +62,17 @@ void fetch()
 {
 	fetchStage.instruction = mainMemory[pc.currentVal / MEMORY_STEP];
 	fetchStage.pcNextVal = pc.currentVal + MEMORY_STEP;
+	fetchStage.machineAddress = pc.currentVal;
 
 	if_dr.nextData.value = fetchStage.instruction;
-
-	if_dr.nextData.value = mainMemory[pc.currentVal / MEMORY_STEP];
-	pc.nextVal = pc.currentVal + MEMORY_STEP;
 	if_dr.nextData.MachineAddress = pc.currentVal;
+
+	pc.nextVal = fetchStage.pcNextVal;
 }
 
 void decode()
 {
+	decodeStage.machineAddress = if_dr.currentData.MachineAddress;
 
 	int code = if_dr.currentData.value;
 	int op = (code & 0xff000000) >> (4 * 6);
@@ -78,7 +83,7 @@ void decode()
 	// R format
 	if (op <= 0x09 && ((op % 2) == 0))
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.RegWrite = 1;
 		dr_ex.nextData.Rd = b1;
 		dr_ex.nextData.operand1 = register_file[b2];
@@ -111,7 +116,7 @@ void decode()
 	// I format
 	if (op <= 0x09 && ((op % 2) == 1))
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.ALUSrc = 1;
 		dr_ex.nextData.RegWrite = 1;
 		dr_ex.nextData.Rd = b1;
@@ -145,7 +150,7 @@ void decode()
 	// Load (D)
 	if ((op == 0x0B))
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.ALUSrc = 1;
 		dr_ex.nextData.Op = ALU_OP_ADD;
 		dr_ex.nextData.MemRead = 1;
@@ -160,7 +165,7 @@ void decode()
 	// Store (D)
 	if (op == 0x0D)
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.Reg2Loc = 1;
 		dr_ex.nextData.ALUSrc = 1;
 		dr_ex.nextData.Op = ALU_OP_ADD;
@@ -175,7 +180,7 @@ void decode()
 	// Branch (B/CB)
 	if ((op >= 0x13) && (op <= 0x19))
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.ALUSrc = 1;
 		dr_ex.nextData.Op = ALU_OP_ADD;
 		dr_ex.nextData.PCSrc = 1;
@@ -210,7 +215,7 @@ void decode()
 	// Mov (IW)
 	if (op == 0x11)
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.Op = ALU_OP_NOP; // TODO: Fix this
 		dr_ex.nextData.MemWrite = 1;
 		dr_ex.nextData.RegWrite = 1;
@@ -223,7 +228,7 @@ void decode()
 	// NOP
 	if (op == 0x00)
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.Op = ALU_OP_NOP;
 		dr_ex.nextData.CountId = COUNT_ID_NOP;
 	}
@@ -231,14 +236,21 @@ void decode()
 	// EXIT
 	if (op == 0x0E)
 	{
-		clearFlags(dr_ex.nextData);
+		clearFlags(&dr_ex.nextData);
 		dr_ex.nextData.Exit = 1;
 		dr_ex.nextData.CountId = COUNT_ID_EXIT;
 	}
+
+	dr_ex.nextData.MachineAddress = if_dr.currentData.MachineAddress;
 }
 
 void exec1()
 {
+
+	ex1_ex2.nextData = dr_ex.currentData;
+	exec1Stage.machineAddress = dr_ex.currentData.MachineAddress;
+	ex1_ex2.nextData.MachineAddress = dr_ex.currentData.MachineAddress;
+
 	if (dr_ex.currentData.Mov)
 		ex1_ex2.nextData.Rd = dr_ex.currentData.operand2;
 
@@ -254,6 +266,9 @@ void exec1()
 
 void exec2()
 {
+	ex2_mem.nextData = ex1_ex2.currentData;
+	exec2Stage.machineAddress = ex1_ex2.currentData.MachineAddress;
+	ex2_mem.nextData.MachineAddress = ex1_ex2.currentData.MachineAddress;
 
 	// Handle Branches
 	if (ex1_ex2.currentData.Branch)
@@ -283,6 +298,9 @@ void memory()
 {
 	mem_wb.nextData = ex2_mem.currentData;
 
+	memoryStage.machineAddress = ex2_mem.currentData.MachineAddress;
+	mem_wb.nextData.MachineAddress = ex2_mem.currentData.MachineAddress;
+
 	if (ex2_mem.currentData.MemWrite)
 		mainMemory[ex2_mem.currentData.value] = ex2_mem.currentData.Rt;
 	if (ex2_mem.currentData.MemRead)
@@ -291,6 +309,8 @@ void memory()
 
 void writeBack()
 {
+	writeBackStage.machineAddress = mem_wb.currentData.MachineAddress;
+
 	instructionCounts[mem_wb.currentData.CountId] += 1;
 
 	if (mem_wb.currentData.RegWrite)
@@ -314,43 +334,42 @@ void putMachineCodeIntoMemory(char **argv)
 		int value;
 		fscanf(fptr, "%x %x", &address, &value);
 		mainMemory[address / MEMORY_STEP] = value;
-		// printf("%08x\n", mainMemory[address / MEMORY_STEP]);
 	}
 	fclose(fptr);
 }
 
 void squashFetchAndDecode()
 {
-	clearFlags(if_dr.currentData);
-	clearFlags(if_dr.nextData);
-	clearFlags(dr_ex.currentData);
-	clearFlags(dr_ex.nextData);
-	clearFlags(ex1_ex2.currentData);
-	clearFlags(ex1_ex2.nextData);
+	clearFlags(&if_dr.currentData);
+	clearFlags(&if_dr.nextData);
+	clearFlags(&dr_ex.currentData);
+	clearFlags(&dr_ex.nextData);
+	clearFlags(&ex1_ex2.currentData);
+	clearFlags(&ex1_ex2.nextData);
 }
 
-void clearFlags(Flags_t src)
+void clearFlags(Flags_t *src)
 {
-	src.value = 0;
-	src.value = 0;
-	src.operand2 = 0;
-	src.operand1 = 0;
-	src.Rt = 0;
-	src.Rd = 0;
-	src.Reg2Loc = 0;
-	src.ALUSrc = 0;
-	src.Op = 0;
-	src.MemRead = 0;
-	src.MemWrite = 0;
-	src.Mem2Reg = 0;
-	src.PCSrc = 0;
-	src.RegWrite = 0;
-	src.Branch = 0;
-	src.BranchType = 0;
-	src.Mov = 0;
-	src.CountId = 0;
-	src.Exit = 0;
-	src.MachineAddress = 0;
+	src->value = 0;
+	src->value = 0;
+	src->operand2 = 0;
+	src->operand1 = 0;
+	src->Rt = 0;
+	src->Rd = 0;
+	src->Reg2Loc = 0;
+	src->ALUSrc = 0;
+	src->Op = 0;
+	src->MemRead = 0;
+	src->MemWrite = 0;
+	src->Mem2Reg = 0;
+	src->PCSrc = 0;
+	src->RegWrite = 0;
+	src->Branch = 0;
+	src->BranchType = 0;
+	src->Mov = 0;
+	src->CountId = 0;
+	src->Exit = 0;
+	src->MachineAddress = 0xffffffff;
 }
 /*------------------------------------------------------------------------
 	Main Function Definition
@@ -360,6 +379,24 @@ int main(int argc, char **argv)
 	// TODO: Code your simulator here
 	// copy the input file to a vector
 	putMachineCodeIntoMemory(argv);
+
+	clearFlags(&if_dr.currentData);
+	clearFlags(&if_dr.nextData);
+	clearFlags(&dr_ex.currentData);
+	clearFlags(&dr_ex.nextData);
+	clearFlags(&ex1_ex2.currentData);
+	clearFlags(&ex1_ex2.nextData);
+	clearFlags(&ex2_mem.currentData);
+	clearFlags(&ex2_mem.nextData);
+	clearFlags(&mem_wb.currentData);
+	clearFlags(&mem_wb.nextData);
+
+	fetchStage.machineAddress = 0xffffffff;
+	decodeStage.machineAddress = 0xffffffff;
+	exec1Stage.machineAddress = 0xffffffff;
+	exec2Stage.machineAddress = 0xffffffff;
+	memoryStage.machineAddress = 0xffffffff;
+	writeBackStage.machineAddress = 0xffffffff;
 
 	printf("== cycle |    fetch |   decode |  exec1   |  exec2   |   memory | writeBack|\n");
 	printf("== ------+----------+----------+----------+----------+----------+----------|\n");
@@ -373,9 +410,9 @@ int main(int argc, char **argv)
 		memory();
 		writeBack();
 		pulse();
-		printf("== %5x | %8x | %8x | %8x | %8x | %8x | %8x |\n", cycle_count, if_dr.currentData.MachineAddress, dr_ex.currentData.MachineAddress, ex1_ex2.currentData.MachineAddress, ex1_ex2.currentData.MachineAddress, ex2_mem.currentData.MachineAddress, mem_wb.currentData.MachineAddress);
+		printf("== %5x | %8x | %8x | %8x | %8x | %8x | %8x |\n", cycle_count, fetchStage.machineAddress, decodeStage.machineAddress, exec1Stage.machineAddress, exec2Stage.machineAddress, memoryStage.machineAddress, writeBackStage.machineAddress);
 		cycle_count++;
-		if (cycle_count > 100)
+		if (cycle_count > 300)
 		{
 			break;
 		}
@@ -383,7 +420,7 @@ int main(int argc, char **argv)
 
 	printf(" === Simulation Reports ===\n");
 	printf("Non-Zero Registers....\n");
-	for (int i = 0; i < sizeof(register_file); i++)
+	for (int i = 0; i < sizeof(register_file) - 1; i++)
 	{
 		if (register_file[i])
 			printf("  X%d, = %d\n", i, register_file[i]);

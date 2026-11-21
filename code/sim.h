@@ -26,7 +26,7 @@ typedef struct Flags
     bool Mov;
     int CountId;
     bool Exit;
-    int MachineAddress;
+    unsigned int MachineAddress;
 } Flags_t;
 
 typedef struct PC
@@ -73,16 +73,37 @@ typedef struct FetchStage
 {
     int32_t instruction;
     int pcNextVal;
+    unsigned int machineAddress;
 } FetchStage_t;
 
 typedef struct DecodeStage
 {
-    int op;
-    int b1;
-    int b2;
-    int b3;
-    
+    unsigned int machineAddress;
 } DecodeStage_t;
+
+typedef struct Exec1Stage
+{
+    unsigned int machineAddress;
+
+} Exec1Stage_t;
+
+typedef struct Exec2Stage
+{
+    unsigned int machineAddress;
+
+} Exec2Stage_t;
+
+typedef struct MemoryStage
+{
+    unsigned int machineAddress;
+
+} MemoryStage_t;
+
+typedef struct WriteBackStage
+{
+    unsigned int machineAddress;
+
+} WriteBackStage_t;
 
 void pulse();
 void fetch();
@@ -93,4 +114,4 @@ void memory();
 void writeBack();
 void putMachineCodeIntoMemory(char **argv);
 void squashFetchAndDecode();
-void clearFlags(Flags_t);
+void clearFlags(Flags_t *src);
